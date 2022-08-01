@@ -58,7 +58,7 @@ with st.expander("Protocol and Ecosystem Parameters", expanded=True):
         value=25000,
     )
     initial_rook_price = st.number_input(
-        "Initial ROOK Price", help="The price of ROOK in $ to start the simulation with", value=25
+        "Initial ROOK Price", help="The price of ROOK in $ to start the simulation with", value=40
     )
 
 # Set bid distribution params
@@ -85,8 +85,8 @@ with st.expander("Volume Growth Model", expanded=True):
     today = date.today()
     volume_model = st.selectbox(
         label="Growth Model",
-        help="The model to use for volume growth over the course of the simulation.",
-        options=("constant", "linear", "logistic"),
+        help="The function used to model volume growth over the course of the simulation.",
+        options=("logistic", "constant", "linear"),
     )
     volume_param_selector, volume_chart = st.columns(spec=2)
 
@@ -122,7 +122,7 @@ with st.expander("Volume Growth Model", expanded=True):
 
     elif volume_model == "logistic":
         start_volume = volume_param_selector.number_input(
-            "Starting Volume in $", min_value=100000, max_value=5000000, value=500000
+            "Starting Volume in $", min_value=100000, max_value=5000000, value=1000000
         )
         max_volume = volume_param_selector.number_input(
             "Max Volume in $", min_value=10000000, max_value=500000000, value=200000000
@@ -160,14 +160,25 @@ with st.expander("Volume Growth Model", expanded=True):
 
 # Set liquidity model
 with st.expander("Liquidity Model", expanded=True):
-    liquidity_model = st.selectbox("Liquidity Model", ("constant", "mcap", "supply"))
+    liquidity_model = st.selectbox(
+        label="Liquidity Model",
+        help="How to model ROOK liquidity. This simulation assumes all ROOK liquidity is in a ROOK/USDC pool \
+            in constant-product AMM like uniswap v2 or sushiswap. Constant means a fixed $ amount of ROOK \
+            liquidity over the course of the simulation. mcap means the liquidity is modeled as a fraction \
+            of ROOK market cap (circulating supply * price). supply means liquidity is modeled as a \
+            fraction of the circulating supply of ROOK, with a matching USDC amount. \
+            Liquidity in ROOK anbd USDC units is recalculated at the beginning of each timestep ",
+        options=("mcap", "constant", "supply"),
+    )
 
     if liquidity_model == "constant":
         liquidity_constant = st.number_input("AMM Liquidity in $", min_value=1000000, max_value=50000000, value=5000000)
     elif liquidity_model == "mcap":
-        liquidity_constant = st.slider("AMM Liquidity as % of mcap", min_value=0.01, max_value=0.2, value=0.1)
+        liquidity_constant = st.slider("AMM Liquidity as % of $ market cap", min_value=0.01, max_value=0.2, value=0.1)
     elif liquidity_model == "supply":
-        liquidity_constant = st.slider("AMM Liquidity as % of circ supply", min_value=0.01, max_value=0.2, value=0.1)
+        liquidity_constant = st.slider(
+            "AMM Liquidity as % of ROOK circ supply", min_value=0.01, max_value=0.2, value=0.1
+        )
 
 # Calculate model
 bid_params = BidDistributionParams(treasury_bid, partner_bid, stake_bid, burn_bid)
@@ -192,13 +203,30 @@ model = RookBidModel(
 
 df = model.run_sim()
 
-fig = make_subplots(3, 1)
+fig = make_subplots(
+    rows=3,
+    cols=2,
+    subplot_titles=(
+        "ROOK Price",
+        "Staked ROOK",
+        "Daily CG Volume",
+        "Unclaimed ROOK",
+        "Treasury ROOK balance",
+        "Burned ROOK",
+    ),
+)
 
 fig.append_trace(go.Scatter(x=df["date"], y=df["rook_price"], name="ROOK Price"), row=1, col=1)
 
 fig.append_trace(go.Scatter(x=df["date"], y=df["daily_volume"], name="Daily Volume"), row=2, col=1)
 
 fig.append_trace(go.Scatter(x=df["date"], y=df["treasury_rook"], name="Treasury ROOK balance"), row=3, col=1)
+
+fig.append_trace(go.Scatter(x=df["date"], y=df["staked_rook"], name="Staked ROOK"), row=1, col=2)
+
+fig.append_trace(go.Scatter(x=df["date"], y=df["unclaimed_rook"], name="Unclaimed ROOK"), row=2, col=2)
+
+fig.append_trace(go.Scatter(x=df["date"], y=df["burned_rook"], name="Burned ROOK"), row=3, col=2)
 
 fig.update_layout(height=1000)
 

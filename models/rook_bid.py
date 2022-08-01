@@ -68,7 +68,7 @@ class RookBidModel:
             market_cap = self.rook_supply.get_circulating_supply() * self.rook_price
             amm_usdc = self.liquidity_constant * market_cap
             amm_rook = amm_usdc / self.rook_price
-        elif self.liquidity_model == "circ_supply":
+        elif self.liquidity_model == "supply":
             amm_rook = self.liquidity_constant * self.rook_supply.get_circulating_supply()
             amm_usdc = amm_rook * self.rook_price
         else:
