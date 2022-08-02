@@ -187,7 +187,7 @@ ecosystem_params = EcosystemParams(mev_volume_ratio, user_claim_percentage, part
 dao_params = DAOParams(treasury_burn_rate)
 volume_params = VolumeParams(start_volume, volume_growth_rate, max_volume)
 
-model = RookBidModel(
+rook_bid_model = RookBidModel(
     sim_length_days=sim_length,
     protocol_params=protocol_params,
     bid_distribution_params=bid_params,
@@ -201,17 +201,17 @@ model = RookBidModel(
     treasury_stables=27000000,
 )
 
-df = model.run_sim()
+rook_bid_data = rook_bid_model.run_sim()
 
 circ_supply_timeseries = (
-    model.rook_supply.total_supply
-    - model.rook_supply.strategic_reserves
-    - df["treasury_rook"]
-    - df["unclaimed_rook"]
-    - df["burned_rook"]
+    rook_bid_model.rook_supply.total_supply
+    - rook_bid_model.rook_supply.strategic_reserves
+    - rook_bid_data["treasury_rook"]
+    - rook_bid_data["unclaimed_rook"]
+    - rook_bid_data["burned_rook"]
 )
 
-mcap_timeseries = circ_supply_timeseries * df["rook_price"]
+mcap_timeseries = circ_supply_timeseries * rook_bid_data["rook_price"]
 
 fig = make_subplots(
     rows=4,
@@ -226,24 +226,33 @@ fig = make_subplots(
         "Circulating Supply",
         "Market Cap",
     ),
+    horizontal_spacing=0.05,
+    vertical_spacing=0.07,
 )
 
-fig.append_trace(go.Scatter(x=df["date"], y=df["rook_price"], name="ROOK Price"), row=1, col=1)
+fig.append_trace(go.Scatter(x=rook_bid_data["date"], y=rook_bid_data["rook_price"], name="ROOK Price"), row=1, col=1)
 
-fig.append_trace(go.Scatter(x=df["date"], y=df["treasury_rook"], name="Treasury ROOK balance"), row=2, col=1)
+fig.append_trace(
+    go.Scatter(x=rook_bid_data["date"], y=rook_bid_data["treasury_rook"], name="Treasury ROOK balance"), row=2, col=1
+)
 
-fig.append_trace(go.Scatter(x=df["date"], y=df["daily_volume"], name="Daily Volume"), row=3, col=1)
+fig.append_trace(
+    go.Scatter(x=rook_bid_data["date"], y=rook_bid_data["daily_volume"], name="Daily Volume"), row=3, col=1
+)
 
-fig.append_trace(go.Scatter(x=df["date"], y=circ_supply_timeseries, name="Circ Supply"), row=4, col=1)
+fig.append_trace(go.Scatter(x=rook_bid_data["date"], y=circ_supply_timeseries, name="Circ Supply"), row=4, col=1)
 
-fig.append_trace(go.Scatter(x=df["date"], y=df["staked_rook"], name="Staked ROOK"), row=1, col=2)
+fig.append_trace(go.Scatter(x=rook_bid_data["date"], y=rook_bid_data["staked_rook"], name="Staked ROOK"), row=1, col=2)
 
-fig.append_trace(go.Scatter(x=df["date"], y=df["unclaimed_rook"], name="Unclaimed ROOK"), row=2, col=2)
+fig.append_trace(
+    go.Scatter(x=rook_bid_data["date"], y=rook_bid_data["unclaimed_rook"], name="Unclaimed ROOK"), row=2, col=2
+)
 
-fig.append_trace(go.Scatter(x=df["date"], y=df["burned_rook"], name="Burned ROOK"), row=3, col=2)
+fig.append_trace(go.Scatter(x=rook_bid_data["date"], y=rook_bid_data["burned_rook"], name="Burned ROOK"), row=3, col=2)
 
-fig.append_trace(go.Scatter(x=df["date"], y=mcap_timeseries, name="Market Cap"), row=4, col=2)
+fig.append_trace(go.Scatter(x=rook_bid_data["date"], y=mcap_timeseries, name="Market Cap"), row=4, col=2)
 
-fig.update_layout(height=1000)
+fig.update_layout(height=1200)
+fig.update_layout(showlegend=False)
 
 st.plotly_chart(fig, use_container_width=True)
