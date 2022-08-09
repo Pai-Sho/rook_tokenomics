@@ -14,10 +14,17 @@ class ProtocolParams:
 
 
 class EcosystemParams:
-    def __init__(self, mev_volume_ratio: float, user_claim_percent: float, partner_claim_percent: float):
+    def __init__(
+        self,
+        mev_volume_ratio: float,
+        user_claim_percent: float,
+        partner_claim_percent: float,
+        target_staking_apr: float,
+    ):
         self.mev_volume_ratio = mev_volume_ratio
         self.user_claim_percent = user_claim_percent
         self.partner_claim_percent = partner_claim_percent
+        self.target_staking_apr = target_staking_apr
 
 
 class DAOParams:
