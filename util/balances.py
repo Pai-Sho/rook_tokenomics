@@ -20,22 +20,27 @@ class RookSupply:
         self.web3 = WEB3
         rook_address = addresses.rook
         rook_abi = fetch_abi(rook_address)
+        xrook_abi = fetch_abi(addresses.xrook)
         rook_contract = self.web3.eth.contract(address=rook_address, abi=rook_abi)
-        decimals = 10 ** rook_contract.functions.decimals().call()
+        xrook_contract = self.web3.eth.contract(address=addresses.xrook, abi=xrook_abi)
+        decimals_rook = 10 ** rook_contract.functions.decimals().call()
+        decimals_xrook = 10 ** xrook_contract.functions.decimals().call()
 
         # Fetch ROOK balances
         total_supply = rook_contract.functions.totalSupply().call()
         treasury = rook_contract.functions.balanceOf(addresses.treasury).call()
         strategic_reserves = rook_contract.functions.balanceOf(addresses.strategic_reserves).call()
         staked = rook_contract.functions.balanceOf(addresses.liquidity_pool_v4).call()
+        xrook_total_supply = xrook_contract.functions.totalSupply().call() / decimals_xrook
 
         # Set initial ROOK balances
-        self.total_supply = total_supply / decimals
-        self.treasury = treasury / decimals
-        self.strategic_reserves = strategic_reserves / decimals
-        self.staked = staked / decimals
+        self.total_supply = total_supply / decimals_rook
+        self.treasury = treasury / decimals_rook
+        self.strategic_reserves = strategic_reserves / decimals_rook
+        self.staked = staked / decimals_rook
         self.burned = 0
         self.unclaimed = 0
+        self.xrook_total_supply = xrook_total_supply
 
     def get_circulating_supply(self):
         return self.total_supply - self.treasury - self.strategic_reserves - self.burned - self.unclaimed
