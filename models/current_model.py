@@ -68,7 +68,7 @@ class CurrentModel:
         treasury_stables = treasury_stables
         treasury_eth = TreasuryEthBalances().get_treasury_eth()
         eth_price = 2000  # TODO: Model eth price, or accept as input
-        staking_apr = 0.005
+        staking_apr = 0.003
 
         # init model states for timeseries
         self.eth_bid_model = ModelState(
@@ -94,7 +94,7 @@ class CurrentModel:
         else:
             raise ValueError("Unsupported Volume Growth Model")
 
-    def iterate_one_day(self, bid_token: str, treasury_burn: bool, volume_usd: float, model_state: ModelState):
+    def iterate_one_day(self, bid_token: str, volume_usd: float, model_state: ModelState):
 
         # Set AMM Liquidity:
         if self.liquidity_model == "mcap":
@@ -194,10 +194,12 @@ class CurrentModel:
         treasury_rook_sold = 0
         treasury_eth_sold = 0
         treasury_eth_usd = model_state.treasury_eth_balance * model_state.eth_price
-        if treasury_burn and treasury_eth_usd >= self.dao_params.daily_treasury_burn:
-            treasury_eth_sold = self.dao_params.daily_treasury_burn / model_state.eth_price
-        elif treasury_burn and treasury_eth_usd < self.dao_params.daily_treasury_burn:
-            treasury_usdc_bought = self.dao_params.daily_treasury_burn
+        if model_state.treasury_stablecoin_balance >= self.dao_params.daily_treasury_burn_usd:
+            model_state.treasury_stablecoin_balance -= self.dao_params.daily_treasury_burn_usd
+        elif treasury_eth_usd >= self.dao_params.daily_treasury_burn_usd:
+            treasury_eth_sold = self.dao_params.daily_treasury_burn_usd / model_state.eth_price
+        elif treasury_eth_usd < self.dao_params.daily_treasury_burn_usd:
+            treasury_usdc_bought = self.dao_params.daily_treasury_burn_usd
             treasury_rook_sold = (amm_rook * treasury_usdc_bought) / (amm_usdc - treasury_usdc_bought)
 
         # New AMM pool balances
@@ -209,7 +211,9 @@ class CurrentModel:
 
         if bid_token == "ROOK":
             model_state.rook_supply.staked += stake_bid - staker_rook_sold + staker_rook_bought
-            model_state.rook_supply.treasury += treasury_bid - treasury_rook_sold
+            model_state.rook_supply.treasury += (
+                treasury_bid - treasury_rook_sold
+            )  # - self.dao_params.daily_treasury_burn_rook
             model_state.rook_supply.unclaimed += user_rook_unclaimed
             model_state.rook_supply.burned += burn_bid
             model_state.rook_supply.xrook_total_supply += xrook_minted - xrook_burned
@@ -218,6 +222,7 @@ class CurrentModel:
                 model_state.staking_apr * 20 / 21
             )
         else:
+            model_state.rook_supply.treasury -= treasury_rook_sold  # + self.dao_params.daily_treasury_burn_rook
             model_state.treasury_eth_balance += treasury_bid - treasury_eth_sold
             model_state.rook_supply.burned += burn_rook_bought
 
@@ -231,28 +236,27 @@ class CurrentModel:
         burned_rook_timeseries = [self.rook_bid_model.rook_supply.burned]
         treasury_eth_timeseries = [self.rook_bid_model.treasury_eth_balance]
         staking_apr_timeseries = [self.rook_bid_model.staking_apr]
-
-        # Calculate stablecoin runway
-        treasury_burn = False
-        stable_runway = math.floor(
-            self.rook_bid_model.treasury_stablecoin_balance / self.dao_params.daily_treasury_burn
-        )
+        treasury_stables_timeseries = [self.rook_bid_model.treasury_stablecoin_balance]
 
         # model loop
         for day in range(self.sim_length_days):
 
-            if day >= stable_runway:
-                treasury_burn = True
+            # At the beginning of each year, allocate the appropriate amount of ROOK for contributor options
+            if day % 365 == 0:
+                rook_options_amount = self.dao_params.yearly_treasury_burn_rook / self.rook_bid_model.rook_price
+                self.rook_bid_model.rook_supply.treasury -= rook_options_amount
 
             self.iterate_one_day(
                 bid_token="ROOK",
                 volume_usd=self.volume_timeseries[day],
-                treasury_burn=treasury_burn,
                 model_state=self.rook_bid_model,
             )
 
-            if self.rook_bid_model.rook_price <= 0 or (
-                self.rook_bid_model.rook_supply.treasury <= 0 and self.rook_bid_model.treasury_eth_balance <= 0
+            # Stop the simulation if ROOK goes to 0, or the treasury runs out of ROOK or ETH
+            if (
+                self.rook_bid_model.rook_price <= 0
+                or self.rook_bid_model.rook_supply.treasury <= 0
+                or self.rook_bid_model.treasury_eth_balance <= 0
             ):
                 break
 
@@ -264,6 +268,7 @@ class CurrentModel:
                 burned_rook_timeseries.append(self.rook_bid_model.rook_supply.burned)
                 treasury_eth_timeseries.append(self.rook_bid_model.treasury_eth_balance)
                 staking_apr_timeseries.append(self.rook_bid_model.staking_apr)
+                treasury_stables_timeseries.append(self.rook_bid_model.treasury_stablecoin_balance)
 
         # construct dataframe
         today = date.today()
@@ -274,6 +279,7 @@ class CurrentModel:
                 "rook_price": rook_price_timeseries,
                 "treasury_rook": treasury_rook_timeseries,
                 "treasury_eth": treasury_eth_timeseries,
+                "treasury_stables": treasury_stables_timeseries,
                 "staked_rook": staked_rook_timeseries,
                 "unclaimed_rook": unclaimed_rook_timeseries,
                 "burned_rook": burned_rook_timeseries,
@@ -293,31 +299,26 @@ class CurrentModel:
         burned_rook_timeseries = [self.eth_bid_model.rook_supply.burned]
         treasury_eth_timeseries = [self.eth_bid_model.treasury_eth_balance]
         staking_apr_timeseries = [self.eth_bid_model.staking_apr]
+        treasury_stables_timeseries = [self.eth_bid_model.treasury_stablecoin_balance]
 
         print(rook_price_timeseries)
         print(staked_rook_timeseries)
         print(staking_apr_timeseries)
         print(unclaimed_rook_timeseries)
 
-        # Calculate stablecoin runway
-        treasury_burn = False
-        stable_runway = math.floor(self.eth_bid_model.treasury_stablecoin_balance / self.dao_params.daily_treasury_burn)
-
         # model loop
         for day in range(self.sim_length_days):
-
-            if day >= stable_runway:
-                treasury_burn = True
 
             self.iterate_one_day(
                 bid_token="ETH",
                 volume_usd=self.volume_timeseries[day],
-                treasury_burn=treasury_burn,
                 model_state=self.eth_bid_model,
             )
 
-            if self.eth_bid_model.rook_price <= 0 or (
-                self.eth_bid_model.rook_supply.treasury <= 0 and self.eth_bid_model.treasury_eth_balance <= 0
+            if (
+                self.eth_bid_model.rook_price <= 0
+                or self.eth_bid_model.rook_supply.treasury <= 0
+                or self.eth_bid_model.treasury_eth_balance <= 0
             ):
                 break
 
@@ -329,6 +330,7 @@ class CurrentModel:
                 burned_rook_timeseries.append(self.eth_bid_model.rook_supply.burned)
                 treasury_eth_timeseries.append(self.eth_bid_model.treasury_eth_balance)
                 staking_apr_timeseries.append(self.eth_bid_model.staking_apr)
+                treasury_stables_timeseries.append(self.eth_bid_model.treasury_stablecoin_balance)
 
         # construct dataframe
         today = date.today()
@@ -338,6 +340,7 @@ class CurrentModel:
                 "daily_volume": self.volume_timeseries[: day + 1],
                 "rook_price": rook_price_timeseries,
                 "treasury_rook": treasury_rook_timeseries,
+                "treasury_stables": treasury_stables_timeseries,
                 "treasury_eth": treasury_eth_timeseries,
                 "staked_rook": staked_rook_timeseries,
                 "unclaimed_rook": unclaimed_rook_timeseries,

@@ -28,8 +28,9 @@ class EcosystemParams:
 
 
 class DAOParams:
-    def __init__(self, daily_treasury_burn: float):
-        self.daily_treasury_burn = daily_treasury_burn
+    def __init__(self, daily_treasury_burn_usd: float, yearly_treasury_burn_rook: float):
+        self.daily_treasury_burn_usd = daily_treasury_burn_usd
+        self.yearly_treasury_burn_rook = yearly_treasury_burn_rook
 
 
 class VolumeParams:
