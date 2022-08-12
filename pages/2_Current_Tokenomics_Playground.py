@@ -78,6 +78,15 @@ with st.expander("Protocol and Ecosystem Parameters", expanded=True):
         value=0.01,
     )
 
+    early_investor_nuke = st.checkbox(
+        "Early Investor Nuke Event",
+        value=False,
+        help="Simulates the potential effects a large early investor deciding to liquidate. \
+            If toggled, when ROOK hits the target price, 100k ROOK will be sold on the market over a 100-day period",
+    )
+    early_investor_nuke_target_price = st.number_input(label="Target Price", min_value=100, max_value=1000, value=500)
+
+
 # Set bid distribution params
 with st.expander("Bid Distribution Parameters", expanded=True):
     bid_input_container, bid_pie_container = st.columns(spec=2)
@@ -220,6 +229,8 @@ current_model = CurrentModel(
     liquidity_constant=liquidity_constant,
     initial_rook_price=initial_rook_price,
     treasury_stables=27000000,
+    early_investor_nuke=early_investor_nuke,
+    early_investor_nuke_target=early_investor_nuke_target_price,
 )
 
 rook_bid_data = current_model.run_sim_rook()

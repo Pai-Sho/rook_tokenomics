@@ -1,5 +1,4 @@
 import math
-from turtle import s
 import numpy as np
 import pandas as pd
 
@@ -49,6 +48,8 @@ class CurrentModel:
         liquidity_constant: float,
         initial_rook_price: float,
         treasury_stables: float = 26460000,
+        early_investor_nuke: bool = False,
+        early_investor_nuke_target: float = 500,
     ):
 
         # Set model parameters
@@ -61,6 +62,8 @@ class CurrentModel:
         self.volume_params = volume_params
         self.liquidity_model = liquidity_model
         self.liquidity_constant = liquidity_constant
+        self.early_investor_nuke = early_investor_nuke
+        self.early_investor_nuke_target = early_investor_nuke_target
 
         # Set initial conditions
         # rook_supply = RookSupply()
@@ -97,7 +100,7 @@ class CurrentModel:
         else:
             raise ValueError("Unsupported Volume Growth Model")
 
-    def iterate_one_day(self, bid_token: str, volume_usd: float, model_state: ModelState):
+    def iterate_one_day(self, bid_token: str, volume_usd: float, model_state: ModelState, early_investor_nuke: bool):
 
         # Set AMM Liquidity:
         if self.liquidity_model == "mcap":
@@ -147,7 +150,7 @@ class CurrentModel:
             burn_bid = daily_bid_volume_usd * self.bid_distribution_params.burn
             stake_bid = daily_bid_volume_usd * self.bid_distribution_params.stake
 
-        # STEP 3: Users and Partners and Burn txns:
+        # STEP 3: Users, Partners and Burn txns:
         burn_rook_bought = 0
 
         # For ROOK bids, a % of users and partners dump rewards
@@ -181,6 +184,13 @@ class CurrentModel:
             # New AMM pool balances
             amm_rook -= burn_rook_bought
             amm_usdc += burn_usdc_sold
+
+        # STEP 3.5: Simulate an early investor dumping on the market
+        if early_investor_nuke:
+            investor_rook_sold = 1000
+            investor_usdc_bought = (amm_usdc * investor_rook_sold) / (amm_rook + investor_rook_sold)
+            amm_rook += investor_rook_sold
+            amm_usdc -= investor_usdc_bought
 
         # STEP 4: Old stakers unstake and sell, or new stakers buy and stake to hit target APR:
         xrook_underlying_value = model_state.rook_supply.staked / model_state.rook_supply.xrook_total_supply
@@ -277,6 +287,10 @@ class CurrentModel:
         staking_apr_timeseries = [self.rook_bid_model.staking_apr]
         treasury_stables_timeseries = [self.rook_bid_model.treasury_stablecoin_balance]
 
+        # Toggle for early investor nuke
+        nuke = False
+        has_nuked = False
+
         # model loop
         for day in range(self.sim_length_days):
 
@@ -285,10 +299,20 @@ class CurrentModel:
                 rook_options_amount = self.dao_params.yearly_treasury_burn_rook / self.rook_bid_model.rook_price
                 self.rook_bid_model.rook_supply.treasury -= rook_options_amount
 
+            # If the price has hit the early investor nuke target, initiate carnage
+            if self.early_investor_nuke and not has_nuked:
+                if self.rook_bid_model.rook_price > self.early_investor_nuke_target:
+                    nuke_end = day + 100
+                    nuke = True
+                if nuke and day >= nuke_end:
+                    nuke = False
+                    has_nuked = True
+
             self.iterate_one_day(
                 bid_token="ROOK",
                 volume_usd=self.volume_timeseries[day],
                 model_state=self.rook_bid_model,
+                early_investor_nuke=nuke,
             )
 
             # Stop the simulation if ROOK goes to 0, or the treasury runs out of ROOK or ETH
@@ -345,6 +369,10 @@ class CurrentModel:
         print(staking_apr_timeseries)
         print(unclaimed_rook_timeseries)
 
+        # Toggle for early investor nuke
+        nuke = False
+        has_nuked = False
+
         # model loop
         for day in range(self.sim_length_days):
 
@@ -353,10 +381,20 @@ class CurrentModel:
                 rook_options_amount = self.dao_params.yearly_treasury_burn_rook / self.eth_bid_model.rook_price
                 self.eth_bid_model.rook_supply.treasury -= rook_options_amount
 
+            # If the price has hit the early investor nuke target, initiate carnage
+            if self.early_investor_nuke and not has_nuked:
+                if self.eth_bid_model.rook_price > self.early_investor_nuke_target:
+                    nuke_end = day + 100
+                    nuke = True
+                if nuke and day >= nuke_end:
+                    nuke = False
+                    has_nuked = True
+
             self.iterate_one_day(
                 bid_token="ETH",
                 volume_usd=self.volume_timeseries[day],
                 model_state=self.eth_bid_model,
+                early_investor_nuke=nuke,
             )
 
             if (
@@ -412,6 +450,10 @@ class CurrentModel:
         print(staking_apr_timeseries)
         print(unclaimed_rook_timeseries)
 
+        # Toggle for early investor nuke
+        nuke = False
+        has_nuked = False
+
         # model loop
         for day in range(self.sim_length_days):
 
@@ -420,10 +462,20 @@ class CurrentModel:
                 rook_options_amount = self.dao_params.yearly_treasury_burn_rook / self.usd_bid_model.rook_price
                 self.usd_bid_model.rook_supply.treasury -= rook_options_amount
 
+            # If the price has hit the early investor nuke target, initiate carnage
+            if self.early_investor_nuke and not has_nuked:
+                if self.usd_bid_model.rook_price > self.early_investor_nuke_target:
+                    nuke_end = day + 100
+                    nuke = True
+                if nuke and day >= nuke_end:
+                    nuke = False
+                    has_nuked = True
+
             self.iterate_one_day(
                 bid_token="USD",
                 volume_usd=self.volume_timeseries[day],
                 model_state=self.usd_bid_model,
+                early_investor_nuke=nuke,
             )
 
             if (
