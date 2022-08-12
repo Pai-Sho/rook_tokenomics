@@ -70,11 +70,14 @@ class CurrentModel:
         eth_price = 2000  # TODO: Model eth price, or accept as input
         staking_apr = 0.003
 
-        # init model states for timeseries
+        # init model states for timeseries (ROOK, ETH, and stablecoin bid models)
         self.eth_bid_model = ModelState(
             rook_price, RookSupply(), eth_price, treasury_eth, treasury_stables, staking_apr
         )
         self.rook_bid_model = ModelState(
+            rook_price, RookSupply(), eth_price, treasury_eth, treasury_stables, staking_apr
+        )
+        self.usd_bid_model = ModelState(
             rook_price, RookSupply(), eth_price, treasury_eth, treasury_stables, staking_apr
         )
 
@@ -112,15 +115,14 @@ class CurrentModel:
         daily_bid_volume_usd = (
             volume_usd * self.ecosystem_params.mev_volume_ratio * self.protocol_params.target_bid_percent
         )
-        if bid_token == "ROOK":
-            # Keepers buy ROOK to bid
+        if bid_token == "ROOK":  # Keepers buy ROOK to bid
             keeper_rook_bought = (amm_rook * daily_bid_volume_usd) / (amm_usdc + daily_bid_volume_usd)
 
             # New AMM pool balances
             amm_rook -= keeper_rook_bought
             amm_usdc += daily_bid_volume_usd
-        else:
-            # Keepers buy ETH to bid
+
+        elif bid_token == "ETH":  # Keepers buy ETH to bid
             keeper_eth_bought = daily_bid_volume_usd / model_state.eth_price
 
         # STEP 2: Keepers bid:
@@ -130,15 +132,25 @@ class CurrentModel:
             partner_bid = keeper_rook_bought * self.bid_distribution_params.partner
             burn_bid = keeper_rook_bought * self.bid_distribution_params.burn
             stake_bid = keeper_rook_bought * self.bid_distribution_params.stake
-        else:
+
+        elif bid_token == "ETH":
             user_bid = keeper_eth_bought * self.bid_distribution_params.user
             treasury_bid = keeper_eth_bought * self.bid_distribution_params.treasury
             partner_bid = keeper_eth_bought * self.bid_distribution_params.partner
             burn_bid = keeper_eth_bought * self.bid_distribution_params.burn
             stake_bid = keeper_eth_bought * self.bid_distribution_params.stake
 
-        # STEP 3: Users and Partners dumping ROOK if applicable:
+        else:  # For stablecoin bids, just split the daily bid usd amount
+            user_bid = daily_bid_volume_usd * self.bid_distribution_params.user
+            treasury_bid = daily_bid_volume_usd * self.bid_distribution_params.treasury
+            partner_bid = daily_bid_volume_usd * self.bid_distribution_params.partner
+            burn_bid = daily_bid_volume_usd * self.bid_distribution_params.burn
+            stake_bid = daily_bid_volume_usd * self.bid_distribution_params.stake
+
+        # STEP 3: Users and Partners and Burn txns:
         burn_rook_bought = 0
+
+        # For ROOK bids, a % of users and partners dump rewards
         if bid_token == "ROOK":
             user_rook_sold = (
                 user_bid * self.ecosystem_params.user_claim_percent
@@ -153,7 +165,8 @@ class CurrentModel:
             amm_rook += user_rook_sold
             amm_usdc -= user_usdc_bought
 
-        else:
+        # For ETH and Stablecoin bids, the ROOK burn portion is bought off the market and burned
+        elif bid_token == "ETH":
             burn_rook_bought = burn_bid * (model_state.eth_price / model_state.rook_price)
             burn_usdc_sold = (amm_usdc * burn_rook_bought) / (amm_rook - burn_rook_bought)
 
@@ -161,7 +174,15 @@ class CurrentModel:
             amm_rook -= burn_rook_bought
             amm_usdc += burn_usdc_sold
 
-        # STEP 4: Old stakers unstake and sell, or new stakers buy and stake if applicable:
+        else:
+            burn_rook_bought = burn_bid / model_state.rook_price
+            burn_usdc_sold = (amm_usdc * burn_rook_bought) / (amm_rook - burn_rook_bought)
+
+            # New AMM pool balances
+            amm_rook -= burn_rook_bought
+            amm_usdc += burn_usdc_sold
+
+        # STEP 4: Old stakers unstake and sell, or new stakers buy and stake to hit target APR:
         xrook_underlying_value = model_state.rook_supply.staked / model_state.rook_supply.xrook_total_supply
         staker_rook_sold = 0
         staker_rook_bought = 0
@@ -220,7 +241,8 @@ class CurrentModel:
             model_state.staking_apr = (((stake_bid / model_state.rook_supply.staked) * 365) * (1 / 21)) + (
                 model_state.staking_apr * 20 / 21
             )
-        else:
+
+        elif bid_token == "ETH":
             model_state.rook_supply.staked += staker_rook_bought - staker_rook_sold
             model_state.rook_supply.treasury -= treasury_rook_sold  # + self.dao_params.daily_treasury_burn_rook
             model_state.treasury_eth_balance += treasury_bid - treasury_eth_sold
@@ -231,6 +253,16 @@ class CurrentModel:
                     * 365
                 )
                 * (1 / 21)
+            ) + (model_state.staking_apr * 20 / 21)
+
+        else:
+            model_state.rook_supply.staked += staker_rook_bought - staker_rook_sold
+            model_state.rook_supply.treasury -= treasury_rook_sold  # + self.dao_params.daily_treasury_burn_rook
+            model_state.treasury_eth_balance -= treasury_eth_sold
+            model_state.treasury_stablecoin_balance += treasury_bid
+            model_state.rook_supply.burned += burn_rook_bought
+            model_state.staking_apr = (
+                ((stake_bid / (model_state.rook_supply.staked * model_state.rook_price)) * 365) * (1 / 21)
             ) + (model_state.staking_apr * 20 / 21)
 
     def run_sim_rook(self):
@@ -343,6 +375,73 @@ class CurrentModel:
                 treasury_eth_timeseries.append(self.eth_bid_model.treasury_eth_balance)
                 staking_apr_timeseries.append(self.eth_bid_model.staking_apr)
                 treasury_stables_timeseries.append(self.eth_bid_model.treasury_stablecoin_balance)
+
+        # construct dataframe
+        today = date.today()
+        dataframe = pd.DataFrame(
+            {
+                "date": pd.Series(pd.date_range(today, periods=day + 1, freq="D")),
+                "daily_volume": self.volume_timeseries[: day + 1],
+                "rook_price": rook_price_timeseries,
+                "treasury_rook": treasury_rook_timeseries,
+                "treasury_stables": treasury_stables_timeseries,
+                "treasury_eth": treasury_eth_timeseries,
+                "staked_rook": staked_rook_timeseries,
+                "unclaimed_rook": unclaimed_rook_timeseries,
+                "burned_rook": burned_rook_timeseries,
+                "staking_apr": staking_apr_timeseries,
+            }
+        )
+
+        return dataframe
+
+    def run_sim_usd(self):
+
+        # ETH bid model
+        rook_price_timeseries = [self.usd_bid_model.rook_price]
+        staked_rook_timeseries = [self.usd_bid_model.rook_supply.staked]
+        treasury_rook_timeseries = [self.usd_bid_model.rook_supply.treasury]
+        unclaimed_rook_timeseries = [self.usd_bid_model.rook_supply.unclaimed]
+        burned_rook_timeseries = [self.usd_bid_model.rook_supply.burned]
+        treasury_eth_timeseries = [self.usd_bid_model.treasury_eth_balance]
+        staking_apr_timeseries = [self.usd_bid_model.staking_apr]
+        treasury_stables_timeseries = [self.usd_bid_model.treasury_stablecoin_balance]
+
+        print(rook_price_timeseries)
+        print(staked_rook_timeseries)
+        print(staking_apr_timeseries)
+        print(unclaimed_rook_timeseries)
+
+        # model loop
+        for day in range(self.sim_length_days):
+
+            # At the beginning of each year, allocate the appropriate amount of ROOK for contributor options
+            if day % 365 == 0:
+                rook_options_amount = self.dao_params.yearly_treasury_burn_rook / self.usd_bid_model.rook_price
+                self.usd_bid_model.rook_supply.treasury -= rook_options_amount
+
+            self.iterate_one_day(
+                bid_token="USD",
+                volume_usd=self.volume_timeseries[day],
+                model_state=self.usd_bid_model,
+            )
+
+            if (
+                self.usd_bid_model.rook_price <= 0
+                or self.usd_bid_model.rook_supply.treasury <= 0
+                or self.usd_bid_model.treasury_eth_balance <= 0
+            ):
+                break
+
+            if day < self.sim_length_days - 1:
+                rook_price_timeseries.append(self.usd_bid_model.rook_price)
+                staked_rook_timeseries.append(self.usd_bid_model.rook_supply.staked)
+                treasury_rook_timeseries.append(self.usd_bid_model.rook_supply.treasury)
+                unclaimed_rook_timeseries.append(self.usd_bid_model.rook_supply.unclaimed)
+                burned_rook_timeseries.append(self.usd_bid_model.rook_supply.burned)
+                treasury_eth_timeseries.append(self.usd_bid_model.treasury_eth_balance)
+                staking_apr_timeseries.append(self.usd_bid_model.staking_apr)
+                treasury_stables_timeseries.append(self.usd_bid_model.treasury_stablecoin_balance)
 
         # construct dataframe
         today = date.today()
