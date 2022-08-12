@@ -152,6 +152,7 @@ class CurrentModel:
             # New AMM pool balances
             amm_rook += user_rook_sold
             amm_usdc -= user_usdc_bought
+
         else:
             burn_rook_bought = burn_bid * (model_state.eth_price / model_state.rook_price)
             burn_usdc_sold = (amm_usdc * burn_rook_bought) / (amm_rook - burn_rook_bought)
@@ -167,27 +168,25 @@ class CurrentModel:
         xrook_minted = 0
         xrook_burned = 0
 
-        if bid_token == "ROOK":
+        if model_state.staking_apr < self.ecosystem_params.target_staking_apr:
+            xrook_burned = model_state.rook_supply.xrook_total_supply * 0.001
 
-            if model_state.staking_apr < self.ecosystem_params.target_staking_apr:
-                xrook_burned = model_state.rook_supply.xrook_total_supply * 0.001
+            rook_unstaked = xrook_burned * xrook_underlying_value
+            staker_rook_sold = rook_unstaked
+            staker_usdc_bought = (amm_usdc * staker_rook_sold) / (amm_rook + staker_rook_sold)
 
-                rook_unstaked = xrook_burned * xrook_underlying_value
-                staker_rook_sold = rook_unstaked
-                staker_usdc_bought = (amm_usdc * staker_rook_sold) / (amm_rook + staker_rook_sold)
+            amm_rook += staker_rook_sold
+            amm_usdc -= staker_usdc_bought
 
-                amm_rook += staker_rook_sold
-                amm_usdc -= staker_usdc_bought
+        elif model_state.staking_apr > self.ecosystem_params.target_staking_apr:
+            rook_staked = model_state.rook_supply.staked * 0.001
+            xrook_minted = rook_staked * xrook_underlying_value
 
-            elif model_state.staking_apr > self.ecosystem_params.target_staking_apr:
-                rook_staked = model_state.rook_supply.staked * 0.001
-                xrook_minted = rook_staked * xrook_underlying_value
+            staker_usdc_sold = rook_staked * model_state.rook_price
+            staker_rook_bought = (amm_rook * staker_usdc_sold) / (amm_usdc + staker_usdc_sold)
 
-                staker_usdc_sold = rook_staked * model_state.rook_price
-                staker_rook_bought = (amm_rook * staker_usdc_sold) / (amm_usdc + staker_usdc_sold)
-
-                amm_rook -= staker_rook_bought
-                amm_usdc += staker_usdc_sold
+            amm_rook -= staker_rook_bought
+            amm_usdc += staker_usdc_sold
 
         # STEP 5: Treasury sells ETH when out of stables, and ROOK when out of ETH
         treasury_usdc_bought = 0
@@ -222,9 +221,17 @@ class CurrentModel:
                 model_state.staking_apr * 20 / 21
             )
         else:
+            model_state.rook_supply.staked += staker_rook_bought - staker_rook_sold
             model_state.rook_supply.treasury -= treasury_rook_sold  # + self.dao_params.daily_treasury_burn_rook
             model_state.treasury_eth_balance += treasury_bid - treasury_eth_sold
             model_state.rook_supply.burned += burn_rook_bought
+            model_state.staking_apr = (
+                (
+                    ((stake_bid * model_state.eth_price) / (model_state.rook_supply.staked * model_state.rook_price))
+                    * 365
+                )
+                * (1 / 21)
+            ) + (model_state.staking_apr * 20 / 21)
 
     def run_sim_rook(self):
 
@@ -308,6 +315,11 @@ class CurrentModel:
 
         # model loop
         for day in range(self.sim_length_days):
+
+            # At the beginning of each year, allocate the appropriate amount of ROOK for contributor options
+            if day % 365 == 0:
+                rook_options_amount = self.dao_params.yearly_treasury_burn_rook / self.eth_bid_model.rook_price
+                self.eth_bid_model.rook_supply.treasury -= rook_options_amount
 
             self.iterate_one_day(
                 bid_token="ETH",
