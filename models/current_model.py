@@ -1,5 +1,5 @@
 import math
-from turtle import st
+from turtle import s
 import numpy as np
 import pandas as pd
 
