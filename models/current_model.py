@@ -187,7 +187,7 @@ class CurrentModel:
 
         # STEP 3.5: Simulate an early investor dumping on the market
         if early_investor_nuke:
-            investor_rook_sold = 1000
+            investor_rook_sold = 1500
             investor_usdc_bought = (amm_usdc * investor_rook_sold) / (amm_rook + investor_rook_sold)
             amm_rook += investor_rook_sold
             amm_usdc -= investor_usdc_bought
@@ -317,10 +317,14 @@ class CurrentModel:
 
             # Stop the simulation if ROOK goes to 0, or the treasury runs out of ROOK or ETH
             if (
-                self.rook_bid_model.rook_price <= 0
+                self.rook_bid_model.rook_price < 0
                 or self.rook_bid_model.rook_supply.treasury <= 0
                 or self.rook_bid_model.treasury_eth_balance <= 0
             ):
+                print("Why did I break? (ROOK sim)")
+                print(self.rook_bid_model.rook_price)
+                print(self.rook_bid_model.rook_supply.treasury)
+                print(self.rook_bid_model.treasury_eth_balance)
                 break
 
             if day < self.sim_length_days - 1:
@@ -364,11 +368,6 @@ class CurrentModel:
         staking_apr_timeseries = [self.eth_bid_model.staking_apr]
         treasury_stables_timeseries = [self.eth_bid_model.treasury_stablecoin_balance]
 
-        print(rook_price_timeseries)
-        print(staked_rook_timeseries)
-        print(staking_apr_timeseries)
-        print(unclaimed_rook_timeseries)
-
         # Toggle for early investor nuke
         nuke = False
         has_nuked = False
@@ -398,10 +397,14 @@ class CurrentModel:
             )
 
             if (
-                self.eth_bid_model.rook_price <= 0
+                self.eth_bid_model.rook_price < 0
                 or self.eth_bid_model.rook_supply.treasury <= 0
                 or self.eth_bid_model.treasury_eth_balance <= 0
             ):
+                print("Why did I break? (ETH sim)")
+                print(self.rook_bid_model.rook_price)
+                print(self.rook_bid_model.rook_supply.treasury)
+                print(self.rook_bid_model.treasury_eth_balance)
                 break
 
             if day < self.sim_length_days - 1:
@@ -445,11 +448,6 @@ class CurrentModel:
         staking_apr_timeseries = [self.usd_bid_model.staking_apr]
         treasury_stables_timeseries = [self.usd_bid_model.treasury_stablecoin_balance]
 
-        print(rook_price_timeseries)
-        print(staked_rook_timeseries)
-        print(staking_apr_timeseries)
-        print(unclaimed_rook_timeseries)
-
         # Toggle for early investor nuke
         nuke = False
         has_nuked = False
@@ -479,7 +477,7 @@ class CurrentModel:
             )
 
             if (
-                self.usd_bid_model.rook_price <= 0
+                self.usd_bid_model.rook_price < 0
                 or self.usd_bid_model.rook_supply.treasury <= 0
                 or self.usd_bid_model.treasury_eth_balance <= 0
             ):
