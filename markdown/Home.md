@@ -16,7 +16,7 @@ This will be a high level overview of the thought process behind designing these
   - Attempts to strike balance between ease of implementation and accuracy (i.e. using constant product AMM for liquidity)
 - Coordination Protocol params (what we have direct, absolute control of)
   - Bidding Parameters:
-    - Bid token (ETH vs ROOK)
+    - Bid token (ETH vs ROOK vs Stablecoin)
     - Target Bid % (what % of expected MEV profit do keepers bid)
       - Treat greenlight algo as black box that works to achieve desired target bid %, modeling the greenlight algo is out of scope
   - Bid distribution parameters:
@@ -28,6 +28,8 @@ This will be a high level overview of the thought process behind designing these
   - Staking parameters:
     - staking-based user rewards % (reward % increases with amount staked)
     - staking lockup period?
+    - "Target APR" for staking
+    - Staking growth or attrition rate, based on Target APR
 - Ecosystem Parameters (we have varying levels of control indirectly, but not absolute)
   - MEV to Volume ratio
   - ROOK liquidity modeling (constant product AMM):
@@ -40,4 +42,4 @@ This will be a high level overview of the thought process behind designing these
     - Logistic volume growth
   - User and partner rewards claim (and dump) %
 - DAO Parameters
-  - Treasury burn rate in USD (for contributor salaries and other expenses)
+  - Treasury burn rate in USD and ROOK (for contributor salaries and other expenses)
