@@ -148,7 +148,7 @@ with st.expander("Volume Growth Model", expanded=True):
 
     elif volume_model == "logistic":
         start_volume = volume_param_selector.number_input(
-            "Starting Volume in $", min_value=100000, max_value=5000000, value=1000000
+            "Starting Volume in $", min_value=100000, max_value=5000000, value=100000
         )
         max_volume = volume_param_selector.number_input(
             "Max Volume in $", min_value=10000000, max_value=500000000, value=200000000
@@ -206,7 +206,7 @@ with st.expander("Liquidity Model", expanded=True):
 
 show_rook = st.checkbox("Show ROOK bid model", value=True)
 show_eth = st.checkbox("Show ETH bid model", value=True)
-show_usd = st.checkbox("Show Stablecoin bid model", value=False)
+# show_usd = st.checkbox("Show Stablecoin bid model", value=False)
 
 # Calculate model
 bid_params = BidDistributionParams(treasury_bid, partner_bid, stake_bid, burn_bid)
@@ -396,55 +396,55 @@ if show_eth:
     )
 
 # Plot Stablecoin Bid data
-if show_usd:
-    fig.append_trace(
-        go.Scatter(x=usd_bid_data["date"], y=usd_bid_data["rook_price"], name="USD Bid", line_color="#ff0000"),
-        row=1,
-        col=1,
-    )
-    fig.append_trace(
-        go.Scatter(x=usd_bid_data["date"], y=usd_bid_data["treasury_rook"], name="USD Bid", line_color="#ff0000"),
-        row=2,
-        col=1,
-    )
-    fig.append_trace(
-        go.Scatter(x=usd_bid_data["date"], y=usd_bid_data["treasury_eth"], name="USD bid", line_color="#ff0000"),
-        row=2,
-        col=2,
-    )
-    fig.append_trace(
-        go.Scatter(x=usd_bid_data["date"], y=usd_bid_data["treasury_stables"], name="USD bid", line_color="#ff0000"),
-        row=3,
-        col=1,
-    )
-    fig.append_trace(
-        go.Scatter(x=usd_bid_data["date"], y=usd_bid_data["staked_rook"], name="USD bid", line_color="#ff0000"),
-        row=4,
-        col=1,
-    )
-    fig.append_trace(
-        go.Scatter(x=usd_bid_data["date"], y=usd_bid_data["staking_apr"], name="USD bid", line_color="#ff0000"),
-        row=4,
-        col=2,
-    )
-    fig.append_trace(
-        go.Scatter(x=usd_bid_data["date"], y=usd_bid_data["unclaimed_rook"], name="USD bid", line_color="#ff0000"),
-        row=5,
-        col=1,
-    )
-    fig.append_trace(
-        go.Scatter(x=usd_bid_data["date"], y=usd_bid_data["burned_rook"], name="USD bid", line_color="#ff0000"),
-        row=5,
-        col=2,
-    )
-    fig.append_trace(
-        go.Scatter(x=usd_bid_data["date"], y=circ_supply_timeseries_usd, name="USD bid", line_color="#ff0000"),
-        row=6,
-        col=1,
-    )
-    fig.append_trace(
-        go.Scatter(x=usd_bid_data["date"], y=mcap_timeseries_usd, name="USD bid", line_color="#ff0000"), row=6, col=2
-    )
+# if show_usd:
+#     fig.append_trace(
+#         go.Scatter(x=usd_bid_data["date"], y=usd_bid_data["rook_price"], name="USD Bid", line_color="#ff0000"),
+#         row=1,
+#         col=1,
+#     )
+#     fig.append_trace(
+#         go.Scatter(x=usd_bid_data["date"], y=usd_bid_data["treasury_rook"], name="USD Bid", line_color="#ff0000"),
+#         row=2,
+#         col=1,
+#     )
+#     fig.append_trace(
+#         go.Scatter(x=usd_bid_data["date"], y=usd_bid_data["treasury_eth"], name="USD bid", line_color="#ff0000"),
+#         row=2,
+#         col=2,
+#     )
+#     fig.append_trace(
+#         go.Scatter(x=usd_bid_data["date"], y=usd_bid_data["treasury_stables"], name="USD bid", line_color="#ff0000"),
+#         row=3,
+#         col=1,
+#     )
+#     fig.append_trace(
+#         go.Scatter(x=usd_bid_data["date"], y=usd_bid_data["staked_rook"], name="USD bid", line_color="#ff0000"),
+#         row=4,
+#         col=1,
+#     )
+#     fig.append_trace(
+#         go.Scatter(x=usd_bid_data["date"], y=usd_bid_data["staking_apr"], name="USD bid", line_color="#ff0000"),
+#         row=4,
+#         col=2,
+#     )
+#     fig.append_trace(
+#         go.Scatter(x=usd_bid_data["date"], y=usd_bid_data["unclaimed_rook"], name="USD bid", line_color="#ff0000"),
+#         row=5,
+#         col=1,
+#     )
+#     fig.append_trace(
+#         go.Scatter(x=usd_bid_data["date"], y=usd_bid_data["burned_rook"], name="USD bid", line_color="#ff0000"),
+#         row=5,
+#         col=2,
+#     )
+#     fig.append_trace(
+#         go.Scatter(x=usd_bid_data["date"], y=circ_supply_timeseries_usd, name="USD bid", line_color="#ff0000"),
+#         row=6,
+#         col=1,
+#     )
+#     fig.append_trace(
+#         go.Scatter(x=usd_bid_data["date"], y=mcap_timeseries_usd, name="USD bid", line_color="#ff0000"), row=6, col=2
+#     )
 
 
 fig.update_layout(height=1800)
